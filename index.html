@@ -1,0 +1,191 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IPv4 Viewer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      --octet-width: 84px;
+    }
+
+    .in_octet {
+      width: var(--octet-width);
+    }
+    #in_prefix {
+      width: 50px;
+    }
+    .label {
+      font-weight: bold;
+      width: 240px;
+      display:inline-block;
+    }
+    .out_bin {
+      font-family: "Courier New", Courier, monospace;
+      width: var(--octet-width);
+      display: inline-block;
+    }
+
+    .out_bin_net {
+      background-color: #dff;
+    }
+    .out_bin_host {
+      background-color: #ffd;
+    }
+    .out_bin_sep {
+      display: inline-block;
+      width: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="content">
+    <div id="inputs" class="row">
+      <span class="label">アドレス：</span>
+      <input type="number" id="in_octet0" class="in_octet" min="0" max="255" value="192"> .
+      <input type="number" id="in_octet1" class="in_octet" min="0" max="255" value="168"> .
+      <input type="number" id="in_octet2" class="in_octet" min="0" max="255" value="0"> .
+      <input type="number" id="in_octet3" class="in_octet" min="0" max="255" value="0"> /
+      <input type="number" id="in_prefix" min="0" max="30" value="20">
+    </div>
+    <br>
+    <div id="result_full" class="row">
+      <span class="label">二進表記：</span>
+      <span id="out_full_octet0" class="out_bin"></span> .
+      <span id="out_full_octet1" class="out_bin"></span> .
+      <span id="out_full_octet2" class="out_bin"></span> .
+      <span id="out_full_octet3" class="out_bin"></span> → 
+      <span id="out_full_ip"></span>
+    </div>
+    <br>
+    <div id="result_subnet" class="row">
+      <span class="label">サブネットマスク：</span>
+      <span id="out_subnet_octet0" class="out_bin"></span> .
+      <span id="out_subnet_octet1" class="out_bin"></span> .
+      <span id="out_subnet_octet2" class="out_bin"></span> .
+      <span id="out_subnet_octet3" class="out_bin"></span> → 
+      <span id="out_subnet_ip"></span>
+    </div>
+    <br>
+    <div id="result_network" class="row">
+      <span class="label">ネットワークアドレス：</span>
+      <span id="out_network_octet0" class="out_bin"></span> .
+      <span id="out_network_octet1" class="out_bin"></span> .
+      <span id="out_network_octet2" class="out_bin"></span> .
+      <span id="out_network_octet3" class="out_bin"></span> → 
+      <span id="out_network_ip"></span>
+    </div>
+    <br>
+    <div id="result_broadcast" class="row">
+      <span class="label">ブロードキャストアドレス：</span>
+      <span id="out_broadcast_octet0" class="out_bin"></span> .
+      <span id="out_broadcast_octet1" class="out_bin"></span> .
+      <span id="out_broadcast_octet2" class="out_bin"></span> .
+      <span id="out_broadcast_octet3" class="out_bin"></span> → 
+      <span id="out_broadcast_ip"></span>
+    </div>
+    <br>
+    <div id="result_netinfo" class="row">
+      <span class="label">利用可能なアドレス：</span>
+      <span id="out_netinfo"></span>
+    </div>
+  </div>
+
+  <script>
+    function update(){
+      let octets = Array.from({length: 4}, (_, i) => parseInt(document.getElementById("in_octet" + i).value));
+      let prefix = parseInt(document.getElementById("in_prefix").value);
+      let mask = subnetmask(prefix);
+      let network_addr = octets.map((octet, i) => octet & mask[i]);
+      let broadcast_addr = octets.map((octet, i) => octet | (~mask[i] & 0xFF));
+
+      writeBinAddr("out_full", octets, prefix);
+      document.getElementById("out_full_ip").innerText = octets.join(".") + "/" + prefix + " （" + addrInfo(octets, prefix) + "）";
+      
+      writeBinAddr("out_subnet", mask, prefix);
+      document.getElementById("out_subnet_ip").innerText = mask.join(".");
+
+      writeBinAddr("out_network", network_addr, prefix);
+      document.getElementById("out_network_ip").innerText = network_addr.join(".") + "/" + prefix;
+
+      writeBinAddr("out_broadcast", broadcast_addr, prefix);
+      document.getElementById("out_broadcast_ip").innerText = broadcast_addr.join(".");
+
+      document.getElementById("out_netinfo").innerText = netInfo(network_addr, prefix);
+    }
+
+    function subnetmask(prefix){
+      return Array.from({length: 4}, (_, i) => {
+        if(prefix >= (i + 1) * 8){
+          return 255;
+        } else if(prefix <= i * 8){
+          return 0;
+        } else {
+          let bits = prefix - i * 8;
+          return (0xFF << (8 - bits)) & 0xFF;
+        }
+      });
+    }
+
+    function addrInfo(octets, prefix){
+      let mask = subnetmask(prefix);
+      let hostid = octets.map((octet, i) => octet & (~mask[i] & 0xFF)).reduce((a, c) => a*256 + c, 0);
+
+      if(hostid == 0){
+        return "ネットワークアドレス";
+      } else if(hostid == (Math.pow(2, 32 - prefix) - 1)){
+        return "ブロードキャストアドレス";
+      } else {
+        return `${hostid}番目のホストアドレス`;
+      }
+    }
+
+    function netInfo(octets, prefix){
+      let mask = subnetmask(prefix);
+      let first = octets.map((octet, i) => (octet & mask[i]) + ((i == 3) ? 1 : 0));
+      let last = octets.map((octet, i) => (octet | (~mask[i] & 0xFF)) - ((i == 3) ? 1 : 0));
+      return `${first.join(".")} 〜 ${last.join(".")} （ホスト部 ${32 - prefix} ビット、 2^${(32 - prefix)} - 2 = ${(2 ** (32 - prefix) - 2)}個）`;
+    }
+
+    function writeBinAddr(id_prefix, octets, prefix){
+      let bits = octets.map(octet => ("00000000" + octet.toString(2)).slice(-8));
+
+      for(let o=0; o<4; o++){
+        let net_bits = Math.min(8, Math.max(0, prefix - o * 8));
+        let host_bits = 8 - net_bits;
+        let span = document.getElementById(id_prefix + "_octet" + o);
+        span.innerHTML = "";
+        for(let b=0; b<8; b++){
+          if(b == 4){
+            let sep = document.createElement("span");
+            sep.innerText = "\u00a0";
+            if(b < net_bits){
+              sep.classList.add("out_bin_net", "out_bin_sep");
+            }else if(b > net_bits){
+              sep.classList.add("out_bin_host", "out_bin_sep");
+            }else{
+              sep.classList.add("out_bin_sep");
+            }
+            span.appendChild(sep);
+          }
+
+          let bit_span = document.createElement("span");
+          bit_span.textContent = bits[o][b];
+          if(b < net_bits){
+            bit_span.classList.add("out_bin_net");
+          } else {
+            bit_span.classList.add("out_bin_host");
+          }
+          span.appendChild(bit_span);
+        }
+      }
+    }
+
+    Array.from(document.getElementsByTagName("input")).forEach(input => {
+      input.addEventListener("input", update);
+    });
+
+    update();
+  </script>
+</body>
+</html>

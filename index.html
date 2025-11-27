@@ -131,13 +131,14 @@
     function addrInfo(octets, prefix){
       let mask = subnetmask(prefix);
       let hostid = octets.map((octet, i) => octet & (~mask[i] & 0xFF)).reduce((a, c) => a*256 + c, 0);
+      let capacity = (2 ** (32 - prefix) - 2);
 
       if(hostid == 0){
         return "ネットワークアドレス";
       } else if(hostid == (Math.pow(2, 32 - prefix) - 1)){
         return "ブロードキャストアドレス";
       } else {
-        return `${hostid}番目のホストアドレス`;
+        return `${capacity}個中 ${hostid}番目 のホストアドレス`;
       }
     }
 
@@ -185,6 +186,20 @@
     Array.from(document.getElementsByTagName("input")).forEach(input => {
       input.addEventListener("input", update);
     });
+
+    {
+      let query = new URLSearchParams(window.location.search).get("ip");
+      if(query){
+        let [addr, prefix] = query.split("/");
+        let octets = addr.split(".").map(octet => parseInt(octet));
+        if(octets.length == 4 && octets.every(octet => !isNaN(octet) && octet >=0 && octet <=255) && !isNaN(prefix) && prefix >=0 && prefix <=30){
+          for(let i=0; i<4; i++){
+            document.getElementById("in_octet" + i).value = octets[i];
+          }
+          document.getElementById("in_prefix").value = prefix;
+        }
+      }
+    }
 
     update();
   </script>
